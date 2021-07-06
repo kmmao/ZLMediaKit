@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -22,7 +22,7 @@ namespace mediakit{
  * h264 Rtmp解码类
  * 将 h264 over rtmp 解复用出 h264-Frame
  */
-class H264RtmpDecoder : public RtmpCodec ,public ResourcePoolHelper<H264Frame> {
+class H264RtmpDecoder : public RtmpCodec {
 public:
     typedef std::shared_ptr<H264RtmpDecoder> Ptr;
 
@@ -32,17 +32,17 @@ public:
     /**
      * 输入264 Rtmp包
      * @param rtmp Rtmp包
-     * @param key_pos 此参数忽略之
      */
-    bool inputRtmp(const RtmpPacket::Ptr &rtmp, bool key_pos = true) override;
+    void inputRtmp(const RtmpPacket::Ptr &rtmp) override;
 
     CodecId getCodecId() const override{
         return CodecH264;
     }
+
 protected:
-    bool decodeRtmp(const RtmpPacket::Ptr &Rtmp);
-    void onGetH264(const char *pcData, int iLen, uint32_t dts,uint32_t pts);
+    void onGetH264(const char *pcData, size_t iLen, uint32_t dts,uint32_t pts);
     H264Frame::Ptr obtainFrame();
+
 protected:
     H264Frame::Ptr _h264frame;
     string _sps;
@@ -52,7 +52,7 @@ protected:
 /**
  * 264 Rtmp打包类
  */
-class H264RtmpEncoder : public H264RtmpDecoder, public ResourcePoolHelper<RtmpPacket> {
+class H264RtmpEncoder : public H264RtmpDecoder{
 public:
     typedef std::shared_ptr<H264RtmpEncoder> Ptr;
 
@@ -78,9 +78,10 @@ public:
 private:
     void makeVideoConfigPkt();
 private:
+    bool _has_vcl = false;
+    bool _got_config_frame = false;
     H264Track::Ptr _track;
-    bool _gotSpsPps = false;
-    RtmpPacket::Ptr _lastPacket;
+    RtmpPacket::Ptr _rtmp_packet;
 };
 
 }//namespace mediakit

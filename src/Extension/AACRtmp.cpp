@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -21,29 +21,30 @@ static string getAacCfg(const RtmpPacket &thiz) {
     if (!thiz.isCfgFrame()) {
         return ret;
     }
-    if (thiz.strBuf.size() < 4) {
+    if (thiz.buffer.size() < 4) {
         WarnL << "bad aac cfg!";
         return ret;
     }
-    ret = thiz.strBuf.substr(2);
+    ret = thiz.buffer.substr(2);
     return ret;
 }
 
-bool AACRtmpDecoder::inputRtmp(const RtmpPacket::Ptr &pkt, bool) {
+void AACRtmpDecoder::inputRtmp(const RtmpPacket::Ptr &pkt) {
     if (pkt->isCfgFrame()) {
         _aac_cfg = getAacCfg(*pkt);
         onGetAAC(nullptr, 0, 0);
-        return false;
+        return;
     }
 
     if (!_aac_cfg.empty()) {
-        onGetAAC(pkt->strBuf.data() + 2, pkt->strBuf.size() - 2, pkt->timeStamp);
+        onGetAAC(pkt->buffer.data() + 2, pkt->buffer.size() - 2, pkt->time_stamp);
     }
-    return false;
 }
 
-void AACRtmpDecoder::onGetAAC(const char* data, int len, uint32_t stamp) {
-    auto frame = ResourcePoolHelper<AACFrame>::obtainObj();
+void AACRtmpDecoder::onGetAAC(const char* data, size_t len, uint32_t stamp) {
+    auto frame = FrameImp::create();
+    frame->_codec_id = CodecAAC;
+
     //生成adts头
     char adts_header[32] = {0};
     auto size = dumpAacConfig(_aac_cfg, len, (uint8_t *) adts_header, sizeof(adts_header));
@@ -94,44 +95,41 @@ void AACRtmpEncoder::inputFrame(const Frame::Ptr &frame) {
     }
 
     if(!_aac_cfg.empty()){
-        RtmpPacket::Ptr rtmpPkt = ResourcePoolHelper<RtmpPacket>::obtainObj();
-        rtmpPkt->strBuf.clear();
-
+        auto rtmpPkt = RtmpPacket::create();
         //header
         uint8_t is_config = false;
-        rtmpPkt->strBuf.push_back(_audio_flv_flags);
-        rtmpPkt->strBuf.push_back(!is_config);
+        rtmpPkt->buffer.push_back(_audio_flv_flags);
+        rtmpPkt->buffer.push_back(!is_config);
 
         //aac data
-        rtmpPkt->strBuf.append(frame->data() + frame->prefixSize(), frame->size() - frame->prefixSize());
+        rtmpPkt->buffer.append(frame->data() + frame->prefixSize(), frame->size() - frame->prefixSize());
 
-        rtmpPkt->bodySize = rtmpPkt->strBuf.size();
-        rtmpPkt->chunkId = CHUNK_AUDIO;
-        rtmpPkt->streamId = STREAM_MEDIA;
-        rtmpPkt->timeStamp = frame->dts();
-        rtmpPkt->typeId = MSG_AUDIO;
-        RtmpCodec::inputRtmp(rtmpPkt, false);
+        rtmpPkt->body_size = rtmpPkt->buffer.size();
+        rtmpPkt->chunk_id = CHUNK_AUDIO;
+        rtmpPkt->stream_index = STREAM_MEDIA;
+        rtmpPkt->time_stamp = frame->dts();
+        rtmpPkt->type_id = MSG_AUDIO;
+        RtmpCodec::inputRtmp(rtmpPkt);
     }
 }
 
 void AACRtmpEncoder::makeAudioConfigPkt() {
     _audio_flv_flags = getAudioRtmpFlags(std::make_shared<AACTrack>(_aac_cfg));
-    RtmpPacket::Ptr rtmpPkt = ResourcePoolHelper<RtmpPacket>::obtainObj();
-    rtmpPkt->strBuf.clear();
+    auto rtmpPkt = RtmpPacket::create();
 
     //header
     uint8_t is_config = true;
-    rtmpPkt->strBuf.push_back(_audio_flv_flags);
-    rtmpPkt->strBuf.push_back(!is_config);
+    rtmpPkt->buffer.push_back(_audio_flv_flags);
+    rtmpPkt->buffer.push_back(!is_config);
     //aac config
-    rtmpPkt->strBuf.append(_aac_cfg);
+    rtmpPkt->buffer.append(_aac_cfg);
 
-    rtmpPkt->bodySize = rtmpPkt->strBuf.size();
-    rtmpPkt->chunkId = CHUNK_AUDIO;
-    rtmpPkt->streamId = STREAM_MEDIA;
-    rtmpPkt->timeStamp = 0;
-    rtmpPkt->typeId = MSG_AUDIO;
-    RtmpCodec::inputRtmp(rtmpPkt, false);
+    rtmpPkt->body_size = rtmpPkt->buffer.size();
+    rtmpPkt->chunk_id = CHUNK_AUDIO;
+    rtmpPkt->stream_index = STREAM_MEDIA;
+    rtmpPkt->time_stamp = 0;
+    rtmpPkt->type_id = MSG_AUDIO;
+    RtmpCodec::inputRtmp(rtmpPkt);
 }
 
 }//namespace mediakit

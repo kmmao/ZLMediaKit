@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -16,7 +16,8 @@
 
 namespace mediakit {
 
-class RtmpMediaSourceMuxer : public RtmpMuxer {
+class RtmpMediaSourceMuxer : public RtmpMuxer, public MediaSourceEventInterceptor,
+                             public std::enable_shared_from_this<RtmpMediaSourceMuxer> {
 public:
     typedef std::shared_ptr<RtmpMediaSourceMuxer> Ptr;
 
@@ -24,34 +25,60 @@ public:
                          const string &strApp,
                          const string &strId,
                          const TitleMeta::Ptr &title = nullptr) : RtmpMuxer(title){
-        _mediaSouce = std::make_shared<RtmpMediaSource>(vhost,strApp,strId);
-        getRtmpRing()->setDelegate(_mediaSouce);
+        _media_src = std::make_shared<RtmpMediaSource>(vhost, strApp, strId);
+        getRtmpRing()->setDelegate(_media_src);
     }
-    virtual ~RtmpMediaSourceMuxer(){}
+
+    ~RtmpMediaSourceMuxer() override{}
 
     void setListener(const std::weak_ptr<MediaSourceEvent> &listener){
-        _mediaSouce->setListener(listener);
+        setDelegate(listener);
+        _media_src->setListener(shared_from_this());
     }
 
     void setTimeStamp(uint32_t stamp){
-        _mediaSouce->setTimeStamp(stamp);
+        _media_src->setTimeStamp(stamp);
     }
 
     int readerCount() const{
-        return _mediaSouce->readerCount();
+        return _media_src->readerCount();
     }
 
     void onAllTrackReady(){
         makeConfigPacket();
-        _mediaSouce->setMetaData(getMetadata());
+        _media_src->setMetaData(getMetadata());
     }
 
-    // 设置TrackSource
-    void setTrackSource(const std::weak_ptr<TrackSource> &track_src){
-        _mediaSouce->setTrackSource(track_src);
+    void onReaderChanged(MediaSource &sender, int size) override {
+        GET_CONFIG(bool, rtmp_demand, General::kRtmpDemand);
+        _enabled = rtmp_demand ? size : true;
+        if (!size && rtmp_demand) {
+            _clear_cache = true;
+        }
+        MediaSourceEventInterceptor::onReaderChanged(sender, size);
     }
+
+    void inputFrame(const Frame::Ptr &frame) override {
+        GET_CONFIG(bool, rtmp_demand, General::kRtmpDemand);
+        if (_clear_cache && rtmp_demand) {
+            _clear_cache = false;
+            _media_src->clearCache();
+        }
+        if (_enabled || !rtmp_demand) {
+            RtmpMuxer::inputFrame(frame);
+        }
+    }
+
+    bool isEnabled() {
+        GET_CONFIG(bool, rtmp_demand, General::kRtmpDemand);
+        //缓存尚未清空时，还允许触发inputFrame函数，以便及时清空缓存
+        return rtmp_demand ? (_clear_cache ? true : _enabled) : true;
+    }
+
 private:
-    RtmpMediaSource::Ptr _mediaSouce;
+    bool _enabled = true;
+    bool _clear_cache = false;
+    RtmpMediaSource::Ptr _media_src;
 };
 
 

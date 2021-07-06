@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -23,14 +23,14 @@ public:
     typedef std::shared_ptr<RtmpRing> Ptr;
     typedef RingBuffer<RtmpPacket::Ptr> RingType;
 
-    RtmpRing(){}
-    virtual ~RtmpRing(){}
+    RtmpRing() {}
+    virtual ~RtmpRing() {}
 
     /**
      * 获取rtmp环形缓存
      * @return
      */
-    virtual RingType::Ptr getRtmpRing() const{
+    virtual RingType::Ptr getRtmpRing() const {
         return _rtmpRing;
     }
 
@@ -38,26 +38,23 @@ public:
      * 设置rtmp环形缓存
      * @param ring
      */
-    virtual void setRtmpRing(const RingType::Ptr &ring){
+    virtual void setRtmpRing(const RingType::Ptr &ring) {
         _rtmpRing = ring;
     }
 
     /**
      * 输入rtmp包
      * @param rtmp rtmp包
-     * @param key_pos 是否为关键帧
-     * @return 是否为关键帧
      */
-    virtual bool inputRtmp(const RtmpPacket::Ptr &rtmp, bool key_pos){
-        if(_rtmpRing){
-            _rtmpRing->write(rtmp,key_pos);
+    virtual void inputRtmp(const RtmpPacket::Ptr &rtmp) {
+        if (_rtmpRing) {
+            _rtmpRing->write(rtmp, rtmp->isVideoKeyFrame());
         }
-        return key_pos;
     }
+
 protected:
     RingType::Ptr _rtmpRing;
 };
-
 
 class RtmpCodec : public RtmpRing, public FrameDispatcher , public CodecInfo{
 public:
@@ -69,5 +66,4 @@ public:
 
 
 }//namespace mediakit
-
 #endif //ZLMEDIAKIT_RTMPCODEC_H

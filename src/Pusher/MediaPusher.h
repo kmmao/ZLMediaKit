@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -24,20 +24,24 @@ public:
     typedef std::shared_ptr<MediaPusher> Ptr;
 
     MediaPusher(const string &schema,
-                const string &strVhost,
-                const string &strApp,
-                const string &strStream,
+                const string &vhost,
+                const string &app,
+                const string &stream,
                 const EventPoller::Ptr &poller = nullptr);
 
     MediaPusher(const MediaSource::Ptr &src,
                 const EventPoller::Ptr &poller = nullptr);
 
     virtual ~MediaPusher();
-    void publish(const string &strUrl) override;
+
+    void publish(const string &url) override;
     EventPoller::Ptr getPoller();
+    void setOnCreateSocket(Socket::onCreateSocket cb);
+
 private:
     std::weak_ptr<MediaSource> _src;
     EventPoller::Ptr _poller;
+    Socket::onCreateSocket _on_create_socket;
 };
 
 } /* namespace mediakit */

@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -16,6 +16,7 @@
 #include "Util/mini.h"
 #include "Util/onceToken.h"
 #include "Util/NoticeCenter.h"
+#include "macros.h"
 
 using namespace std;
 using namespace toolkit;
@@ -28,26 +29,6 @@ namespace mediakit {
 //默认配置文件名为 /path/to/your/exe.ini
 //加载配置文件成功后返回true，否则返回false
 bool loadIniConfig(const char *ini_path = nullptr);
-////////////其他宏定义///////////
-#ifndef MAX
-#define MAX(a,b) ((a) > (b) ? (a) : (b) )
-#endif //MAX
-
-#ifndef MIN
-#define MIN(a,b) ((a) < (b) ? (a) : (b) )
-#endif //MIN
-
-#ifndef CLEAR_ARR
-#define CLEAR_ARR(arr) for(auto &item : arr){ item = 0;}
-#endif //CLEAR_ARR
-
-#define SERVER_NAME "ZLMediaKit-5.0(build in " __DATE__ " " __TIME__ ")"
-#define VHOST_KEY "vhost"
-#define HTTP_SCHEMA "http"
-#define RTSP_SCHEMA "rtsp"
-#define RTMP_SCHEMA "rtmp"
-#define HLS_SCHEMA "hls"
-#define DEFAULT_VHOST "__defaultVhost__"
 
 ////////////广播名称///////////
 namespace Broadcast {
@@ -58,7 +39,11 @@ extern const string kBroadcastMediaChanged;
 
 //录制mp4文件成功后广播
 extern const string kBroadcastRecordMP4;
-#define BroadcastRecordMP4Args const MP4Info &info
+#define BroadcastRecordMP4Args const RecordInfo &info
+
+// 录制 ts 文件后广播
+extern const string kBroadcastRecordTs;
+#define BroadcastRecordTsArgs const RecordInfo &info
 
 //收到http api请求广播
 extern const string kBroadcastHttpRequest;
@@ -86,8 +71,7 @@ extern const string kBroadcastOnRtspAuth;
 //如果errMessage为空则代表鉴权成功
 //enableHls: 是否允许转换hls
 //enableMP4: 是否运行MP4录制
-//enableRtxp: rtmp推流时是否运行转rtsp；rtsp推流时，是否允许转rtmp
-typedef std::function<void(const string &errMessage,bool enableRtxp,bool enableHls,bool enableMP4)> PublishAuthInvoker;
+typedef std::function<void(const string &errMessage, bool enableHls, bool enableMP4)> PublishAuthInvoker;
 
 //收到rtsp/rtmp推流事件广播，通过该事件控制推流鉴权
 extern const string kBroadcastMediaPublish;
@@ -111,7 +95,7 @@ extern const string kBroadcastFlowReport;
 
 //未找到流后会广播该事件，请在监听该事件后去拉流或其他方式产生流，这样就能按需拉流了
 extern const string kBroadcastNotFoundStream;
-#define BroadcastNotFoundStreamArgs const MediaInfo &args,SockInfo &sender
+#define BroadcastNotFoundStreamArgs const MediaInfo &args,SockInfo &sender, const function<void()> &closePlayer
 
 //某个流无人消费时触发，目的为了实现无人观看时主动断开拉流等业务逻辑
 extern const string kBroadcastStreamNoneReader;
@@ -149,6 +133,8 @@ extern const string kBroadcastReloadConfig;
 
 ////////////通用配置///////////
 namespace General{
+//每个流媒体服务器的ID（GUID）
+extern const string kMediaServerId;
 //流量汇报事件流量阈值,单位KB，默认1MB
 extern const string kFlowThreshold;
 //流无人观看并且超过若干时间后才触发kBroadcastStreamNoneReader事件
@@ -165,8 +151,6 @@ extern const string kAddMuteAudio;
 //拉流代理时如果断流再重连成功是否删除前一次的媒体流数据，如果删除将重新开始，
 //如果不删除将会接着上一次的数据继续写(录制hls/mp4时会继续在前一个文件后面写)
 extern const string kResetWhenRePlay;
-//是否默认推流时转换成rtsp或rtmp，hook接口(on_publish)中可以覆盖该设置
-extern const string kPublishToRtxp ;
 //是否默认推流时转换成hls，hook接口(on_publish)中可以覆盖该设置
 extern const string kPublishToHls ;
 //是否默认推流时mp4录像，hook接口(on_publish)中可以覆盖该设置
@@ -176,6 +160,14 @@ extern const string kPublishToMP4 ;
 extern const string kMergeWriteMS ;
 //全局的时间戳覆盖开关，在转协议时，对frame进行时间戳覆盖
 extern const string kModifyStamp;
+//按需转协议的开关
+extern const string kHlsDemand;
+extern const string kRtspDemand;
+extern const string kRtmpDemand;
+extern const string kTSDemand;
+extern const string kFMP4Demand;
+//转协议是否全局开启或忽略音频
+extern const string kEnableAudio;
 }//namespace General
 
 
@@ -236,12 +228,6 @@ namespace Rtp {
 extern const string kVideoMtuSize;
 //RTP打包最大MTU,公网情况下更小
 extern const string kAudioMtuSize;
-//RTP排序缓存最大个数
-extern const string kMaxRtpCount;
-//如果RTP序列正确次数累计达到该数字就启动清空排序缓存
-extern const string kClearCount;
-//最大RTP时间为13个小时，每13小时回环一次
-extern const string kCycleMS;
 } //namespace Rtsp
 
 ////////////组播配置///////////
@@ -284,14 +270,16 @@ extern const string kSegmentRetain;
 extern const string kFileBufSize;
 //录制文件路径
 extern const string kFilePath;
+// 是否广播 ts 切片完成通知
+extern const string kBroadcastRecordTs;
+//hls直播文件删除延时，单位秒
+extern const string kDeleteDelaySec;
 } //namespace Hls
 
 ////////////Rtp代理相关配置///////////
 namespace RtpProxy {
 //rtp调试数据保存目录,置空则不生成
 extern const string kDumpDir;
-//是否限制udp数据来源ip和端口
-extern const string kCheckSource;
 //rtp接收超时时间
 extern const string kTimeoutSec;
 } //namespace RtpProxy

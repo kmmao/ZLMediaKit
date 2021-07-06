@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -35,25 +35,30 @@ public:
      * 意思是在文件流化结束之前或中断之前,MP4Reader对象是不会被销毁的(不管有没有被外部对象持有)
      */
     void startReadMP4();
+
 private:
     //MediaSourceEvent override
     bool seekTo(MediaSource &sender,uint32_t ui32Stamp) override;
     bool close(MediaSource &sender,bool force) override;
     int totalReaderCount(MediaSource &sender) override;
+    MediaOriginType getOriginType(MediaSource &sender) const override;
+    string getOriginUrl(MediaSource &sender) const override;
 
     bool readSample();
     uint32_t getCurrentStamp();
     void setCurrentStamp(uint32_t ui32Stamp);
     bool seekTo(uint32_t ui32Stamp);
+
 private:
-    recursive_mutex _mtx;
-    MultiMediaSourceMuxer::Ptr _mediaMuxer;
+    bool _have_video = false;
     uint32_t _seek_to;
+    string _file_path;
+    recursive_mutex _mtx;
     Ticker _seek_ticker;
     Timer::Ptr _timer;
     EventPoller::Ptr _poller;
     MP4Demuxer::Ptr _demuxer;
-    bool _have_video = false;
+    MultiMediaSourceMuxer::Ptr _mediaMuxer;
 };
 
 } /* namespace mediakit */

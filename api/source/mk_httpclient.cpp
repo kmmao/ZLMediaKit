@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -78,7 +78,7 @@ static C get_http_header( const char *response_header[]){
         }
         break;
     }
-    return std::move(header);
+    return header;
 }
 
 API_EXPORT void API_CALL mk_http_requester_set_body(mk_http_requester ctx, mk_http_body body){
@@ -113,7 +113,7 @@ API_EXPORT const char* API_CALL mk_http_requester_get_response_header(mk_http_re
     return (*obj)->response()[key].c_str();
 }
 
-API_EXPORT const char* API_CALL mk_http_requester_get_response_body(mk_http_requester ctx, int *length){
+API_EXPORT const char* API_CALL mk_http_requester_get_response_body(mk_http_requester ctx, size_t *length){
     assert(ctx);
     HttpRequester::Ptr *obj = (HttpRequester::Ptr *)ctx;
     if(length){

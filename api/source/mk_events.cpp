@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -101,11 +101,10 @@ API_EXPORT void API_CALL mk_events_listen(const mk_events *events){
                 s_events.on_mk_media_publish((mk_media_info) &args,
                                              (mk_publish_auth_invoker) &invoker,
                                              (mk_sock_info) &sender);
-            }else{
-                GET_CONFIG(bool,toRtxp,General::kPublishToRtxp);
-                GET_CONFIG(bool,toHls,General::kPublishToHls);
-                GET_CONFIG(bool,toMP4,General::kPublishToMP4);
-                invoker("",toRtxp,toHls,toMP4);
+            } else {
+                GET_CONFIG(bool, toHls, General::kPublishToHls);
+                GET_CONFIG(bool, toMP4, General::kPublishToMP4);
+                invoker("", toHls, toMP4);
             }
         });
 

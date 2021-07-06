@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -27,12 +27,15 @@ public:
 
     MediaPlayer(const EventPoller::Ptr &poller = nullptr);
     virtual ~MediaPlayer();
-    void play(const string &strUrl) override;
-    void pause(bool bPause) override;
+    void play(const string &url) override;
+    void pause(bool pause) override;
     void teardown() override;
     EventPoller::Ptr getPoller();
+    void setOnCreateSocket(Socket::onCreateSocket cb);
+
 private:
     EventPoller::Ptr _poller;
+    Socket::onCreateSocket _on_create_socket;
 };
 
 } /* namespace mediakit */

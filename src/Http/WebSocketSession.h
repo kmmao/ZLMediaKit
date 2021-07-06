@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -19,7 +19,7 @@
  */
 class SendInterceptor{
 public:
-    typedef function<int(const Buffer::Ptr &buf)> onBeforeSendCB;
+    typedef function<ssize_t (const Buffer::Ptr &buf)> onBeforeSendCB;
     SendInterceptor() = default;
     virtual ~SendInterceptor() = default;
     virtual void setOnBeforeSendCB(const onBeforeSendCB &cb) = 0;
@@ -35,7 +35,7 @@ public:
     typedef std::shared_ptr<TcpSessionTypeImp> Ptr;
 
     TcpSessionTypeImp(const Parser &header, const HttpSession &parent, const Socket::Ptr &pSock) :
-            _identifier(parent.getIdentifier()), TcpSessionType(pSock) {}
+            TcpSessionType(pSock), _identifier(parent.getIdentifier()) {}
 
     ~TcpSessionTypeImp() {}
 
@@ -53,11 +53,11 @@ protected:
      * @param buf 需要截取的数据
      * @return 数据字节数
      */
-    int send(const Buffer::Ptr &buf) override {
+    ssize_t send(Buffer::Ptr buf) override {
         if (_beforeSendCB) {
             return _beforeSendCB(buf);
         }
-        return TcpSessionType::send(buf);
+        return TcpSessionType::send(std::move(buf));
     }
 
     string getIdentifier() const override {
@@ -65,8 +65,8 @@ protected:
     }
 
 private:
-    onBeforeSendCB _beforeSendCB;
     string _identifier;
+    onBeforeSendCB _beforeSendCB;
 };
 
 template <typename TcpSessionType>
@@ -77,7 +77,6 @@ public:
         return std::make_shared<TcpSessionTypeImp<TcpSessionType> >(header,parent,pSock);
     }
 };
-
 
 /**
 * 通过该模板类可以透明化WebSocket协议，
@@ -105,10 +104,11 @@ public:
         }
     }
 
-    void attachServer(const TcpServer &server) override{
+    void attachServer(const Server &server) override{
         HttpSessionType::attachServer(server);
-        _weakServer = const_cast<TcpServer &>(server).shared_from_this();
+        _weak_server = const_cast<Server &>(server).shared_from_this();
     }
+
 protected:
     /**
      * websocket客户端连接上事件
@@ -117,12 +117,12 @@ protected:
      */
     bool onWebSocketConnect(const Parser &header) override{
         //创建websocket session类
-        _session = _creator(header, *this,HttpSessionType::_sock);
+        _session = _creator(header, *this,HttpSessionType::getSock());
         if(!_session){
             //此url不允许创建websocket连接
             return false;
         }
-        auto strongServer = _weakServer.lock();
+        auto strongServer = _weak_server.lock();
         if(strongServer){
             _session->attachServer(*strongServer);
         }
@@ -145,24 +145,20 @@ protected:
         //允许websocket客户端
         return true;
     }
+
     /**
      * 开始收到一个webSocket数据包
-     * @param packet
      */
     void onWebSocketDecodeHeader(const WebSocketHeader &packet) override{
         //新包，原来的包残余数据清空掉
-        _remian_data.clear();
+        _payload_section.clear();
     }
 
     /**
      * 收到websocket数据包负载
-     * @param packet
-     * @param ptr
-     * @param len
-     * @param recved
      */
-    void onWebSocketDecodePayload(const WebSocketHeader &packet,const uint8_t *ptr,uint64_t len,uint64_t recved) override {
-        _remian_data.append((char *)ptr,len);
+    void onWebSocketDecodePayload(const WebSocketHeader &packet,const uint8_t *ptr,size_t len,size_t recved) override {
+        _payload_section.append((char *)ptr,len);
     }
 
     /**
@@ -177,39 +173,60 @@ protected:
         switch (header._opcode){
             case WebSocketHeader::CLOSE:{
                 HttpSessionType::encode(header,nullptr);
-            }
+                HttpSessionType::shutdown(SockException(Err_shutdown, "recv close request from client"));
                 break;
+            }
+            
             case WebSocketHeader::PING:{
                 header._opcode = WebSocketHeader::PONG;
-                HttpSessionType::encode(header,std::make_shared<BufferString>(_remian_data));
-            }
+                HttpSessionType::encode(header,std::make_shared<BufferString>(_payload_section));
                 break;
-            case WebSocketHeader::CONTINUATION:{
-
             }
-                break;
+            
+            case WebSocketHeader::CONTINUATION:
             case WebSocketHeader::TEXT:
             case WebSocketHeader::BINARY:{
-                _session->onRecv(std::make_shared<BufferString>(_remian_data));
+                if (!header._fin) {
+                    //还有后续分片数据, 我们先缓存数据，所有分片收集完成才一次性输出
+                    _payload_cache.append(std::move(_payload_section));
+                    if (_payload_cache.size() < MAX_WS_PACKET) {
+                        //还有内存容量缓存分片数据
+                        break;
+                    }
+                    //分片缓存太大，需要清空
+                }
+
+                //最后一个包
+                if (_payload_cache.empty()) {
+                    //这个包是唯一个分片
+                    _session->onRecv(std::make_shared<WebSocketBuffer>(header._opcode, header._fin, std::move(_payload_section)));
+                    break;
+                }
+
+                //这个包由多个分片组成
+                _payload_cache.append(std::move(_payload_section));
+                _session->onRecv(std::make_shared<WebSocketBuffer>(header._opcode, header._fin, std::move(_payload_cache)));
+                _payload_cache.clear();
+                break;
             }
-                break;
-            default:
-                break;
+            
+            default: break;
         }
-        _remian_data.clear();
+        _payload_section.clear();
         header._mask_flag = flag;
     }
 
     /**
-    * 发送数据进行websocket协议打包后回调
-    * @param buffer
+     * 发送数据进行websocket协议打包后回调
     */
-    void onWebSocketEncodeData(const Buffer::Ptr &buffer) override{
-        HttpSessionType::send(buffer);
+    void onWebSocketEncodeData(Buffer::Ptr buffer) override{
+        HttpSessionType::send(std::move(buffer));
     }
+
 private:
-    string _remian_data;
-    weak_ptr<TcpServer> _weakServer;
+    string _payload_cache;
+    string _payload_section;
+    weak_ptr<Server> _weak_server;
     TcpSession::Ptr _session;
     Creator _creator;
 };

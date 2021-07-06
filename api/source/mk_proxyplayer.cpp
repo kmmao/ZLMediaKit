@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -16,7 +16,7 @@ using namespace mediakit;
 
 API_EXPORT mk_proxy_player API_CALL mk_proxy_player_create(const char *vhost, const char *app, const char *stream, int hls_enabled, int mp4_enabled) {
     assert(vhost && app && stream);
-    PlayerProxy::Ptr *obj(new PlayerProxy::Ptr(new PlayerProxy(vhost, app, stream, true, true, hls_enabled, mp4_enabled)));
+    PlayerProxy::Ptr *obj(new PlayerProxy::Ptr(new PlayerProxy(vhost, app, stream, hls_enabled, mp4_enabled)));
     return (mk_proxy_player) obj;
 }
 
@@ -51,9 +51,9 @@ API_EXPORT void API_CALL mk_proxy_player_set_on_close(mk_proxy_player ctx, on_mk
     PlayerProxy::Ptr &obj = *((PlayerProxy::Ptr *) ctx);
     obj->getPoller()->async([obj,cb,user_data](){
         //切换线程再操作
-        obj->setOnClose([cb,user_data](){
+        obj->setOnClose([cb,user_data](const SockException &ex){
             if(cb){
-                cb(user_data);
+                cb(user_data, ex.getErrCode(), ex.what(), ex.getCustomCode());
             }
         });
     });

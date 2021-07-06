@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -20,23 +20,10 @@
 #include "Util/TimeTicker.h"
 #include "Common/MediaSink.h"
 #include "MP4Muxer.h"
+
 using namespace toolkit;
 
 namespace mediakit {
-
-class MP4Info {
-public:
-    time_t ui64StartedTime; //GMT标准时间，单位秒
-    time_t ui64TimeLen;//录像长度，单位秒
-    off_t ui64FileSize;//文件大小，单位BYTE
-    string strFilePath;//文件路径
-    string strFileName;//文件名称
-    string strFolder;//文件夹路径
-    string strUrl;//播放路径
-    string strAppName;//应用名称
-    string strStreamId;//流ID
-    string strVhost;//vhost
-};
 
 #ifdef ENABLE_MP4
 class MP4Recorder : public MediaSinkInterface{
@@ -46,7 +33,8 @@ public:
     MP4Recorder(const string &strPath,
                 const string &strVhost,
                 const string &strApp,
-                const string &strStreamId);
+                const string &strStreamId,
+                size_t max_second);
     virtual ~MP4Recorder();
 
     /**
@@ -68,12 +56,13 @@ private:
     void closeFile();
     void asyncClose();
 private:
+    bool _haveVideo = false;
+    size_t _max_second;
     string _strPath;
     string _strFile;
     string _strFileTmp;
     Ticker _createFileTicker;
-    MP4Info _info;
-    bool _haveVideo = false;
+    RecordInfo _info;
     MP4Muxer::Ptr _muxer;
     list<Track::Ptr> _tracks;
 };
