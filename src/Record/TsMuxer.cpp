@@ -94,13 +94,7 @@ void TsMuxer::inputFrame(const Frame::Ptr &frame) {
     int64_t dts_out, pts_out;
     _is_idr_fast_packet = !_have_video;
     switch (frame->getCodecId()){
-        case CodecH264: {
-            int type = H264_TYPE(*((uint8_t *) frame->data() + frame->prefixSize()));
-            if (type == H264Frame::NAL_SEI) {
-                break;
-            }
-        }
-
+        case CodecH264:
         case CodecH265: {
             //这里的代码逻辑是让SPS、PPS、IDR这些时间戳相同的帧打包到一起当做一个帧处理，
             _frame_merger.inputFrame(frame, [&](uint32_t dts, uint32_t pts, const Buffer::Ptr &buffer, bool have_idr){
@@ -139,7 +133,7 @@ void TsMuxer::inputFrame(const Frame::Ptr &frame) {
 void TsMuxer::resetTracks() {
     _have_video = false;
     //通知片段中断
-    onTs(nullptr, 0, _timestamp, 0);
+    onTs(nullptr, _timestamp, 0);
     uninit();
     init();
 }
@@ -166,12 +160,14 @@ void TsMuxer::init() {
 }
 
 void TsMuxer::onTs_l(const void *packet, size_t bytes) {
-    _cache.append((char *) packet, bytes);
+    if (!_cache) {
+        _cache = std::make_shared<BufferLikeString>();
+    }
+    _cache->append((char *) packet, bytes);
 }
 
 void TsMuxer::flushCache() {
-    onTs(_cache.data(), _cache.size(), _timestamp, _is_idr_fast_packet);
-    _cache.clear();
+    onTs(std::move(_cache), _timestamp, _is_idr_fast_packet);
     _is_idr_fast_packet = false;
 }
 
